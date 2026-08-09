@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.log
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.test-tmp/
+
+# User-owned source data and papers must never be committed.
+QASAS レパトアデータ/
+QASAS データベース CoV-AbDab/
+QASAS 論文集/
+
+# Generated result files.
+QASAS 結果/
+results/
+validation/
+*.tmp.xlsx
