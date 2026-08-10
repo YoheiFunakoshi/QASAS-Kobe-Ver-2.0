@@ -9,7 +9,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
 from . import gui as single_gui
@@ -39,6 +39,9 @@ class QASASV2Application(SingleSampleApplication):
         self.tc_worker: threading.Thread | None = None
         self.tc_result: TimeCourseResult | None = None
         self.tc_specs: list[TimepointSpec] = []
+        self.tc_expanded_window: tk.Toplevel | None = None
+        self.tc_expanded_figure: Figure | None = None
+        self.tc_expanded_canvas: FigureCanvasTkAgg | None = None
 
         self.tc_series_name = tk.StringVar(master=root, value="")
         self.tc_database_path = tk.StringVar(master=root, value="")
@@ -214,6 +217,13 @@ class QASASV2Application(SingleSampleApplication):
             state="disabled",
         )
         self.tc_save_figure_button.pack(side="left", padx=(8, 0))
+        self.tc_expand_figure_button = ttk.Button(
+            action,
+            text="Figを大きく表示",
+            command=self._show_expanded_timecourse_chart,
+            state="disabled",
+        )
+        self.tc_expand_figure_button.pack(side="left", padx=(8, 0))
 
         cards = ttk.Frame(outer)
         cards.grid(row=4, column=0, sticky="ew", pady=(0, 8))
@@ -273,6 +283,9 @@ class QASASV2Application(SingleSampleApplication):
         self.tc_figure = Figure(figsize=(10.8, 5.3), dpi=100, facecolor="white")
         self.tc_chart_canvas = FigureCanvasTkAgg(self.tc_figure, master=chart_tab)
         self.tc_chart_canvas.get_tk_widget().grid(row=1, column=0, sticky="nsew")
+        self.tc_chart_canvas.get_tk_widget().bind(
+            "<Double-Button-1>", lambda _event: self._show_expanded_timecourse_chart()
+        )
         self._draw_empty_timecourse_chart()
 
         selected_tab.columnconfigure(0, weight=1)
@@ -500,10 +513,12 @@ class QASASV2Application(SingleSampleApplication):
         if busy:
             self.tc_save_excel_button.configure(state="disabled")
             self.tc_save_figure_button.configure(state="disabled")
+            self.tc_expand_figure_button.configure(state="disabled")
         else:
             state = "normal" if self.tc_result else "disabled"
             self.tc_save_excel_button.configure(state=state)
             self.tc_save_figure_button.configure(state=state)
+            self.tc_expand_figure_button.configure(state=state)
 
     def _start_timecourse_analysis(self) -> None:
         database = Path(self.tc_database_path.get().strip())
@@ -593,6 +608,7 @@ class QASASV2Application(SingleSampleApplication):
         self.root.after(100, self._poll_timecourse_events)
 
     def _clear_timecourse_results(self) -> None:
+        self._close_expanded_timecourse_chart()
         self.tc_summary_tree.delete(*self.tc_summary_tree.get_children())
         self.tc_series_summary.set("解析中…")
         self.tc_database_summary.set("解析中…")
@@ -661,10 +677,16 @@ class QASASV2Application(SingleSampleApplication):
         self.tc_chart_canvas.draw_idle()
 
     def _draw_timecourse_chart(self) -> None:
-        if not self.tc_result:
+        if self.tc_result is None:
             self._draw_empty_timecourse_chart()
             return
-        self.tc_figure.clear()
+        self._populate_timecourse_figure(self.tc_figure, expanded=False)
+        self.tc_chart_canvas.draw_idle()
+        self._refresh_expanded_timecourse_chart()
+
+    def _populate_timecourse_figure(self, figure: Figure, *, expanded: bool) -> None:
+        assert self.tc_result is not None
+        figure.clear()
         cumulative = self.tc_summary_kind.get() == "累積"
         summary_sets = [
             point.analysis.cumulative_summaries if cumulative else point.analysis.exact_summaries
@@ -683,25 +705,110 @@ class QASASV2Application(SingleSampleApplication):
                 ("frequency_percent", "%Frequency", "#127A22"),
             )
         rows = len(metrics)
+        axes = figure.subplots(rows, 3, squeeze=False)
         for row_index, (attribute, y_label, color) in enumerate(metrics):
             for distance in range(3):
-                axis = self.tc_figure.add_subplot(rows, 3, row_index * 3 + distance + 1)
+                axis = axes[row_index][distance]
                 values = [getattr(summaries[distance], attribute) for summaries in summary_sets]
                 axis.plot(days, values, color=color, marker="o", linewidth=2, markersize=5)
                 comparator = "<=" if cumulative else "="
-                axis.set_title(f"CDR3 AA Distance {comparator} {distance}", fontsize=9)
-                axis.set_xlabel("Day", fontsize=8)
-                axis.set_ylabel(y_label, fontsize=8)
+                axis.set_title(
+                    f"CDR3 AA Distance {comparator} {distance}",
+                    fontsize=10 if expanded else 8,
+                    pad=6 if expanded else 2,
+                )
+                if expanded or row_index == rows - 1:
+                    axis.set_xlabel("Day", fontsize=9 if expanded else 7, labelpad=4 if expanded else 1)
+                axis.set_ylabel(y_label, fontsize=9 if expanded else 7, labelpad=5 if expanded else 2)
                 axis.grid(alpha=0.28, linestyle="--")
-                axis.tick_params(labelsize=7)
+                axis.tick_params(labelsize=8 if expanded else 6, pad=3 if expanded else 1)
+                axis.margins(x=0.04)
                 if values and min(values) >= 0:
                     axis.set_ylim(bottom=0)
-        self.tc_figure.suptitle(
-            f"{self.tc_result.series_name} | {mode_specification(self.tc_result.matching_mode).short_label}",
-            fontsize=11,
-        )
-        self.tc_figure.tight_layout(rect=(0, 0, 1, 0.96))
-        self.tc_chart_canvas.draw_idle()
+        if expanded:
+            figure.suptitle(
+                f"{self.tc_result.series_name} | "
+                f"{mode_specification(self.tc_result.matching_mode).short_label}",
+                fontsize=13,
+                y=0.985,
+            )
+            figure.subplots_adjust(
+                left=0.065,
+                right=0.985,
+                bottom=0.08,
+                top=0.91,
+                wspace=0.34,
+                hspace=0.58 if rows == 2 else 0.72,
+            )
+        else:
+            # The embedded canvas is intentionally compact because the input
+            # controls occupy most of the screen.  Omit duplicate upper-row
+            # x labels and reserve extra vertical space so titles never overlap.
+            figure.subplots_adjust(
+                left=0.055,
+                right=0.995,
+                bottom=0.14,
+                top=0.96,
+                wspace=0.40,
+                hspace=1.05 if rows == 2 else 1.30,
+            )
+
+    def _show_expanded_timecourse_chart(self) -> None:
+        if self.tc_result is None:
+            return
+        if self.tc_expanded_window is not None and self.tc_expanded_window.winfo_exists():
+            self.tc_expanded_window.deiconify()
+            self.tc_expanded_window.lift()
+            self.tc_expanded_window.focus_force()
+            self._refresh_expanded_timecourse_chart()
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title(f"{APP_TITLE} - 経時グラフ（拡大表示）")
+        window.geometry("1400x850")
+        window.minsize(900, 600)
+        window.protocol("WM_DELETE_WINDOW", self._close_expanded_timecourse_chart)
+
+        host = ttk.Frame(window, padding=(6, 6, 6, 2))
+        host.pack(fill="both", expand=True)
+        host.columnconfigure(0, weight=1)
+        host.rowconfigure(0, weight=1)
+        figure = Figure(figsize=(14, 8), dpi=100, facecolor="white")
+        canvas = FigureCanvasTkAgg(figure, master=host)
+        canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        toolbar = NavigationToolbar2Tk(canvas, host, pack_toolbar=False)
+        toolbar.update()
+        toolbar.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+
+        self.tc_expanded_window = window
+        self.tc_expanded_figure = figure
+        self.tc_expanded_canvas = canvas
+        self._refresh_expanded_timecourse_chart()
+        window.update_idletasks()
+        try:
+            window.state("zoomed")
+        except tk.TclError:
+            pass
+
+    def _refresh_expanded_timecourse_chart(self) -> None:
+        if (
+            self.tc_result is None
+            or self.tc_expanded_window is None
+            or not self.tc_expanded_window.winfo_exists()
+            or self.tc_expanded_figure is None
+            or self.tc_expanded_canvas is None
+        ):
+            return
+        self._populate_timecourse_figure(self.tc_expanded_figure, expanded=True)
+        self.tc_expanded_canvas.draw_idle()
+
+    def _close_expanded_timecourse_chart(self) -> None:
+        window = self.tc_expanded_window
+        self.tc_expanded_window = None
+        self.tc_expanded_figure = None
+        self.tc_expanded_canvas = None
+        if window is not None and window.winfo_exists():
+            window.destroy()
 
     def _draw_empty_selected_chart(self) -> None:
         self.tc_single_figure.clear()
@@ -803,7 +910,9 @@ class QASASV2Application(SingleSampleApplication):
         try:
             destination = Path(selected)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            self.tc_figure.savefig(destination, dpi=300, bbox_inches="tight")
+            export_figure = Figure(figsize=(14, 8), dpi=100, facecolor="white")
+            self._populate_timecourse_figure(export_figure, expanded=True)
+            export_figure.savefig(destination, dpi=300, bbox_inches="tight")
         except Exception as exc:
             self._append_tc_log(traceback.format_exc())
             messagebox.showerror(APP_TITLE, f"Figを保存できませんでした。\n\n{exc}")
