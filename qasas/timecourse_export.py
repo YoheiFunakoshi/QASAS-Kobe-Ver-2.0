@@ -9,6 +9,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from .modes import ALGORITHM_VERSION, mode_specification
+from .provenance import file_provenance, runtime_provenance_rows
 from .timecourse import TimeCourseResult, format_day
 
 
@@ -93,6 +94,12 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     spec = mode_specification(result.matching_mode)
+    database_provenance = file_provenance(result.database.source_path)
+    sample_provenance = {}
+    for point in result.timepoints:
+        source = point.analysis.sample.source_path.resolve()
+        if source not in sample_provenance:
+            sample_provenance[source] = file_provenance(source)
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Time Course Summary"
@@ -221,6 +228,10 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
         "Label",
         "Sample ID",
         "Input format",
+        "Repertoire file",
+        "Repertoire SHA-256",
+        "Repertoire size (bytes)",
+        "Repertoire modified time",
         "Source rows",
         "Accepted rows",
         "Skipped rows",
@@ -233,6 +244,7 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
     _style_header(qc, 1, 1, len(qc_headers))
     for point in result.timepoints:
         sample = point.analysis.sample
+        provenance = sample_provenance[sample.source_path.resolve()]
         metadata = " | ".join(f"{key}: {value}" for key, value in sample.metadata.items())
         qc.append(
             [
@@ -240,6 +252,10 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
                 point.spec.label,
                 sample.sample_id,
                 sample.input_format,
+                str(provenance.path),
+                provenance.sha256,
+                provenance.size_bytes,
+                provenance.modified_at,
                 sample.source_rows,
                 sample.accepted_rows,
                 sample.skipped_rows,
@@ -298,6 +314,9 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
         ("Matching mode code", result.matching_mode.value),
         ("Matching mode", spec.label),
         ("Common database", str(result.database.source_path)),
+        ("Common database SHA-256", database_provenance.sha256),
+        ("Common database size (bytes)", database_provenance.size_bytes),
+        ("Common database modified time", database_provenance.modified_at),
         ("Time-point order", "Ascending numeric Day; true numeric x spacing"),
         ("Allowed Day", "Any finite signed number, including negative, zero, positive, and decimal"),
         ("Duplicate Day", "Rejected; no automatic averaging or pooling"),
@@ -308,6 +327,7 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
         ("Candidate selection", spec.candidate_rule),
         ("CDR3 handling", spec.cdr3_handling),
     ]
+    method_rows.extend(runtime_provenance_rows())
     for row in method_rows:
         method.append(row)
 
@@ -318,3 +338,4 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
         _autosize(sheet)
     workbook.save(destination)
     return destination
+
