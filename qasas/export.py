@@ -237,4 +237,3 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
     _autosize(matched)
     workbook.save(destination)
     return destination
-
