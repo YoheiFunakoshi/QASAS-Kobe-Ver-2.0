@@ -185,4 +185,3 @@ analysis-YYYYMMDD/
 旧QASAS方式は、QASAS2 `function2.R` の `readreport2()`、`createdb2.base()`、`createdb2()`、`findcov2()` に関係する照合中核を対象とします。QASAS2のRパッケージ環境、注釈別 `sumcov2()`、時系列処理、Virus／Strain／Variant分類、旧グラフ外観まで含む完全なR実行環境の再現ではありません。
 
 旧QASAS2の完全なR処理を再現する場合は、別途作成した「旧QASAS2照合・集計方法 再現手順書」と固定コミット `b1987209a7b2fb5bc0a55360654b79d01384dccb` を使用してください。
-
