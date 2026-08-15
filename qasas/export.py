@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 
 from .models import AnalysisResult
 from .modes import ALGORITHM_VERSION, mode_specification
+from .provenance import file_provenance, file_provenance_rows, runtime_provenance_rows
 
 
 _HEADER_FILL = PatternFill("solid", fgColor="17365D")
@@ -55,6 +56,8 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     spec = mode_specification(result.matching_mode)
+    sample_provenance = file_provenance(result.sample.source_path)
+    database_provenance = file_provenance(result.database.source_path)
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Summary"
@@ -69,7 +72,9 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
         ("Sample ID", result.sample.sample_id),
         ("Input format", result.sample.input_format),
         ("Repertoire file", str(result.sample.source_path)),
+        ("Repertoire SHA-256", sample_provenance.sha256),
         ("Database file", str(result.database.source_path)),
+        ("Database SHA-256", database_provenance.sha256),
         ("Sample unique clones", len(result.sample.clones)),
         ("Sample listed reads", result.sample.listed_reads),
         ("Sample frequency denominator reads", result.sample.total_reads),
@@ -153,6 +158,7 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
         ("Maximum distance", len(result.exact_summaries) - 1),
         ("Reproducibility warning", "Results from different matching modes must not be pooled as the same method."),
     ]
+    method_rows.extend(runtime_provenance_rows())
     for row in method_rows:
         method.append(row)
     method.freeze_panes = "A2"
@@ -161,6 +167,8 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
     qc.append(["Item", "Value"])
     _style_header(qc, 1, 1, 2)
     qc_rows = [
+        *file_provenance_rows("Repertoire", sample_provenance),
+        *file_provenance_rows("Database", database_provenance),
         ("Sample source rows", result.sample.source_rows),
         ("Sample accepted rows", result.sample.accepted_rows),
         ("Sample skipped rows", result.sample.skipped_rows),
@@ -229,3 +237,4 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
     _autosize(matched)
     workbook.save(destination)
     return destination
+
