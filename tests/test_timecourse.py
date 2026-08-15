@@ -1,4 +1,5 @@
 import csv
+from hashlib import sha256
 from pathlib import Path
 import unittest
 
@@ -138,6 +139,22 @@ class TimeCourseTests(unittest.TestCase):
             }
             self.assertEqual(method_values["Time-course module version"], TIMECOURSE_VERSION)
             self.assertEqual(method_values["Duplicate Day"], "Rejected; no automatic averaging or pooling")
+            self.assertEqual(
+                method_values["Common database SHA-256"],
+                sha256(database_path.read_bytes()).hexdigest(),
+            )
+            self.assertRegex(method_values["Application source SHA-256"], r"^[0-9a-f]{64}$")
+            qc = workbook["Sample QC"]
+            qc_headers = [qc.cell(row=1, column=column).value for column in range(1, qc.max_column + 1)]
+            sha_column = qc_headers.index("Repertoire SHA-256") + 1
+            expected_sample_hashes = {
+                sha256(first.read_bytes()).hexdigest(),
+                sha256(second.read_bytes()).hexdigest(),
+            }
+            actual_sample_hashes = {
+                qc.cell(row=row, column=sha_column).value for row in range(2, qc.max_row + 1)
+            }
+            self.assertEqual(actual_sample_hashes, expected_sample_hashes)
             self.assertEqual(workbook["Long Summary"].max_row, 13)
         finally:
             workbook.close()

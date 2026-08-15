@@ -1,3 +1,4 @@
+from hashlib import sha256
 from itertools import product
 from pathlib import Path
 import unittest
@@ -13,21 +14,25 @@ from tests.support import test_path
 
 class EngineExportTests(unittest.TestCase):
     def _sample(self) -> SampleData:
+        source = test_path("engine_sample.csv")
+        source.write_bytes(b"sample provenance fixture\n")
         clones = (
             SampleClone(("IGHV1-2",), ("IGHJ4",), "ABCDE", 10, 50.0),
             SampleClone(("IGHV1-2",), ("IGHJ4",), "ABCXE", 5, 25.0),
             SampleClone(("IGHV1-2",), ("IGHJ4",), "ABXYE", 3, 15.0),
             SampleClone(("IGHV3-23",), ("IGHJ6",), "ABCDE", 2, 10.0),
         )
-        return SampleData(Path("sample.csv"), "CPM", "S1", clones, 20, 4, 4, 0)
+        return SampleData(source, "CPM", "S1", clones, 20, 4, 4, 0)
 
     def _database(self) -> DatabaseData:
+        source = test_path("engine_database.csv")
+        source.write_bytes(b"database provenance fixture\n")
         entries = (
             DatabaseEntry("IGHV1-2", "IGHJ4", "ABCDE", {"Name": ("KnownAb",)}),
             DatabaseEntry("IGHV3-23", "IGHJ4", "ABCDE", {"Name": ("WrongJ",)}),
         )
         return DatabaseData(
-            Path("db.csv"), entries, 2, 2, 0, ("Name",), "Heavy V Gene", "Heavy J Gene", "CDRH3"
+            source, entries, 2, 2, 0, ("Name",), "Heavy V Gene", "Heavy J Gene", "CDRH3"
         )
 
     def test_analysis_keeps_exact_distance_classes_separate(self):
@@ -46,6 +51,26 @@ class EngineExportTests(unittest.TestCase):
             self.assertEqual(workbook["Matched Clones"]["A2"].value, "LV0")
             self.assertEqual(workbook["Method"]["B2"].value, ALGORITHM_VERSION)
             self.assertEqual(workbook["Method"]["B3"].value, "kobe")
+            summary_values = {
+                workbook["Summary"].cell(row=row, column=1).value:
+                workbook["Summary"].cell(row=row, column=2).value
+                for row in range(3, workbook["Summary"].max_row + 1)
+            }
+            self.assertEqual(
+                summary_values["Repertoire SHA-256"],
+                sha256(b"sample provenance fixture\n").hexdigest(),
+            )
+            self.assertEqual(
+                summary_values["Database SHA-256"],
+                sha256(b"database provenance fixture\n").hexdigest(),
+            )
+            method_values = {
+                workbook["Method"].cell(row=row, column=1).value:
+                workbook["Method"].cell(row=row, column=2).value
+                for row in range(2, workbook["Method"].max_row + 1)
+            }
+            self.assertIn("Repository Git commit", method_values)
+            self.assertRegex(method_values["Application source SHA-256"], r"^[0-9a-f]{64}$")
         finally:
             workbook.close()
 
