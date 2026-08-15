@@ -139,4 +139,3 @@ def runtime_provenance_rows() -> tuple[tuple[str, object], ...]:
         ("Operating system", platform.platform()),
         ("Provenance timing", "Calculated automatically when this Excel file was exported"),
     )
-
