@@ -16,6 +16,10 @@ Ver 2.0の経時解析固有の入力規則、計算式、CLIマニフェスト�
 
 ファイル名が同じでも内容が同じとは限りません。必ずSHA-256で同一性を確認します。
 
+現在の通常解析・経時解析Excelは、保存時に検体とDBのSHA-256、ファイルサイズ、更新時刻を自動計算して `Input QC` または `Sample QC` と `Method` に記録します。さらにGitコミット、作業ツリー状態、QASASソース全体のSHA-256、Python・主要ライブラリ・OSの版も `Method` に記録します。入力データ本体がExcelやGitHubへ複製・送信されることはありません。
+
+`Git working tree` が `modified` の場合は、同じコミットでも未コミット変更を含む状態です。その場合は `Application source SHA-256` も一致することを確認してください。正式な再現用解析では、可能な限り `clean` の状態を使用します。
+
 ## 2. ソースコードの固定
 
 解析に使用したリポジトリで次を実行し、結果と一緒に保存します。
@@ -181,3 +185,4 @@ analysis-YYYYMMDD/
 旧QASAS方式は、QASAS2 `function2.R` の `readreport2()`、`createdb2.base()`、`createdb2()`、`findcov2()` に関係する照合中核を対象とします。QASAS2のRパッケージ環境、注釈別 `sumcov2()`、時系列処理、Virus／Strain／Variant分類、旧グラフ外観まで含む完全なR実行環境の再現ではありません。
 
 旧QASAS2の完全なR処理を再現する場合は、別途作成した「旧QASAS2照合・集計方法 再現手順書」と固定コミット `b1987209a7b2fb5bc0a55360654b79d01384dccb` を使用してください。
+
