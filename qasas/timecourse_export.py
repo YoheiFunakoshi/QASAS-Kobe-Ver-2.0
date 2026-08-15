@@ -338,4 +338,3 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
         _autosize(sheet)
     workbook.save(destination)
     return destination
-
