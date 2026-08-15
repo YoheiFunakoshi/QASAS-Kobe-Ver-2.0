@@ -142,6 +142,43 @@ class TimeCourseTests(unittest.TestCase):
         finally:
             workbook.close()
 
+    def test_timecourse_excel_charts_use_numeric_day_axis(self):
+        database_path = self._database()
+        day_zero = self._sample("tc_chart_day_zero.csv", 10, 5)
+        day_one = self._sample("tc_chart_day_one.csv", 20, 2)
+        day_fourteen = self._sample("tc_chart_day_fourteen.csv", 30, 1)
+        result = analyse_timecourse(
+            (
+                TimepointSpec(14, "day 14", day_fourteen, "CPM"),
+                TimepointSpec(0, "day 0", day_zero, "CPM"),
+                TimepointSpec(1, "day 1", day_one, "CPM"),
+            ),
+            database_path,
+            series_name="Numeric day axis",
+        )
+        output = export_timecourse_xlsx(result, test_path("timecourse_numeric_axis.xlsx"))
+        workbook = load_workbook(output, read_only=False, data_only=False)
+        try:
+            summary = workbook["Time Course Summary"]
+            self.assertEqual(
+                [summary.cell(row=row, column=1).value for row in range(6, 9)],
+                [0, 1, 14],
+            )
+            self.assertEqual(len(summary._charts), 2)
+            for chart in summary._charts:
+                self.assertEqual(chart.tagname, "scatterChart")
+                self.assertEqual(chart.scatterStyle, "lineMarker")
+                self.assertEqual(chart.x_axis.axPos, "b")
+                self.assertEqual(chart.y_axis.axPos, "l")
+                self.assertEqual(len(chart.series), 3)
+                for series in chart.series:
+                    self.assertEqual(
+                        series.xVal.numRef.f,
+                        "'Time Course Summary'!$A$6:$A$8",
+                    )
+        finally:
+            workbook.close()
+
 
 if __name__ == "__main__":
     unittest.main()

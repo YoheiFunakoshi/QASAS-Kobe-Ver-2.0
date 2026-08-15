@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook
-from openpyxl.chart import LineChart, Reference
+from openpyxl.chart import Reference, ScatterChart, Series
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -47,6 +47,44 @@ def _annotation_order(result: TimeCourseResult) -> list[str]:
     ordered = [column for column in preferred if column in available]
     ordered.extend(column for column in available if column not in ordered)
     return ordered
+
+
+def _timecourse_scatter_chart(
+    summary,
+    *,
+    header_row: int,
+    final_row: int,
+    min_col: int,
+    max_col: int,
+    title: str,
+    y_axis_title: str,
+) -> ScatterChart:
+    """Create a line-and-marker chart with numeric Day spacing on the x-axis."""
+
+    chart = ScatterChart()
+    chart.scatterStyle = "lineMarker"
+    chart.title = title
+    chart.y_axis.title = y_axis_title
+    chart.x_axis.title = "Day"
+    chart.x_axis.axPos = "b"
+    chart.y_axis.axPos = "l"
+    day_values = Reference(
+        summary,
+        min_col=1,
+        min_row=header_row + 1,
+        max_row=final_row,
+    )
+    for column in range(min_col, max_col + 1):
+        values = Reference(
+            summary,
+            min_col=column,
+            min_row=header_row,
+            max_row=final_row,
+        )
+        chart.series.append(Series(values, day_values, title_from_data=True))
+    chart.height = 7
+    chart.width = 13
+    return chart
 
 
 def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
@@ -122,32 +160,26 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
 
     if result.timepoints:
         final_row = header_row + len(result.timepoints)
-        clone_chart = LineChart()
-        clone_chart.title = "Cumulative unique clones"
-        clone_chart.y_axis.title = "Unique clones"
-        clone_chart.x_axis.title = "Day"
-        clone_chart.add_data(
-            Reference(summary, min_col=8, max_col=10, min_row=header_row, max_row=final_row),
-            titles_from_data=True,
+        clone_chart = _timecourse_scatter_chart(
+            summary,
+            header_row=header_row,
+            final_row=final_row,
+            min_col=8,
+            max_col=10,
+            title="Cumulative unique clones",
+            y_axis_title="Unique clones",
         )
-        clone_chart.set_categories(Reference(summary, min_col=1, min_row=header_row + 1, max_row=final_row))
-        clone_chart.height = 7
-        clone_chart.width = 13
         summary.add_chart(clone_chart, "AA5")
 
-        frequency_chart = LineChart()
-        frequency_chart.title = "Cumulative frequency (%)"
-        frequency_chart.y_axis.title = "Frequency (%)"
-        frequency_chart.x_axis.title = "Day"
-        frequency_chart.add_data(
-            Reference(summary, min_col=14, max_col=16, min_row=header_row, max_row=final_row),
-            titles_from_data=True,
+        frequency_chart = _timecourse_scatter_chart(
+            summary,
+            header_row=header_row,
+            final_row=final_row,
+            min_col=14,
+            max_col=16,
+            title="Cumulative frequency (%)",
+            y_axis_title="Frequency (%)",
         )
-        frequency_chart.set_categories(
-            Reference(summary, min_col=1, min_row=header_row + 1, max_row=final_row)
-        )
-        frequency_chart.height = 7
-        frequency_chart.width = 13
         summary.add_chart(frequency_chart, "AA20")
 
     long_sheet = workbook.create_sheet("Long Summary")
