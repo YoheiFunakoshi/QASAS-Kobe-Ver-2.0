@@ -313,6 +313,7 @@ def export_timecourse_xlsx(result: TimeCourseResult, path: str | Path) -> Path:
         ("Series name", result.series_name),
         ("Matching mode code", result.matching_mode.value),
         ("Matching mode", spec.label),
+        ("Database input format", result.database.metadata.get("Database input format", "Unspecified")),
         ("Common database", str(result.database.source_path)),
         ("Common database SHA-256", database_provenance.sha256),
         ("Common database size (bytes)", database_provenance.size_bytes),

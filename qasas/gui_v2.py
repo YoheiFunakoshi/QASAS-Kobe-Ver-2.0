@@ -13,7 +13,13 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from . import gui as single_gui
+from .database_formats import (
+    COV_ABDAB_DATABASE_FORMAT,
+    database_format_label,
+    resolve_database_format,
+)
 from .gui import QASASApplication as SingleSampleApplication
+from .input_formats import AUTO_INPUT_FORMAT, input_format_label
 from .modes import GUI_MODE_LABELS, MatchingMode, mode_specification, parse_matching_mode
 from .timecourse import (
     TimeCourseResult,
@@ -45,13 +51,14 @@ class QASASV2Application(SingleSampleApplication):
 
         self.tc_series_name = tk.StringVar(master=root, value="")
         self.tc_database_path = tk.StringVar(master=root, value="")
+        self.tc_database_format = tk.StringVar(master=root, value=COV_ABDAB_DATABASE_FORMAT)
         default_mode = mode_specification(MatchingMode.KOBE)
         self.tc_matching_mode = tk.StringVar(master=root, value=default_mode.label)
         self.tc_mode_description = tk.StringVar(master=root, value=default_mode.description)
         self.tc_day = tk.StringVar(master=root, value="")
         self.tc_label = tk.StringVar(master=root, value="")
         self.tc_sample_path = tk.StringVar(master=root, value="")
-        self.tc_input_format = tk.StringVar(master=root, value="自動判定")
+        self.tc_input_format = tk.StringVar(master=root, value=AUTO_INPUT_FORMAT)
         self.tc_status_text = tk.StringVar(master=root, value="Dayと検体を2件以上追加してください。")
         self.tc_series_summary = tk.StringVar(master=root, value="未解析")
         self.tc_database_summary = tk.StringVar(master=root, value="未解析")
@@ -110,14 +117,21 @@ class QASASV2Application(SingleSampleApplication):
         ttk.Label(common, text="系列名（任意）").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=3)
         self.tc_series_entry = ttk.Entry(common, textvariable=self.tc_series_name)
         self.tc_series_entry.grid(row=0, column=1, sticky="ew", pady=3)
-        ttk.Label(common, text="抗体DB (CSV)").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=3)
+        ttk.Label(common, text="DB形式").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=3)
+        self.tc_database_format_frame, self.tc_database_format_buttons = self._create_database_format_buttons(
+            common,
+            self.tc_database_format,
+        )
+        self.tc_database_format_frame.grid(row=1, column=1, columnspan=2, sticky="w", pady=3)
+
+        ttk.Label(common, text="抗体DBファイル").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=3)
         self.tc_database_entry = ttk.Entry(common, textvariable=self.tc_database_path)
-        self.tc_database_entry.grid(row=1, column=1, sticky="ew", pady=3)
+        self.tc_database_entry.grid(row=2, column=1, sticky="ew", pady=3)
         self.tc_database_button = ttk.Button(common, text="参照…", command=self._browse_tc_database)
-        self.tc_database_button.grid(row=1, column=2, padx=(8, 0), pady=3)
-        ttk.Label(common, text="照合方式").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=3)
+        self.tc_database_button.grid(row=2, column=2, padx=(8, 0), pady=3)
+        ttk.Label(common, text="照合方式").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=3)
         mode_frame = ttk.Frame(common)
-        mode_frame.grid(row=2, column=1, columnspan=2, sticky="ew", pady=3)
+        mode_frame.grid(row=3, column=1, columnspan=2, sticky="ew", pady=3)
         self.tc_mode_box = ttk.Combobox(
             mode_frame,
             textvariable=self.tc_matching_mode,
@@ -143,23 +157,20 @@ class QASASV2Application(SingleSampleApplication):
         ttk.Label(samples, text="表示名（任意）").grid(row=0, column=1, sticky="w")
         self.tc_label_entry = ttk.Entry(samples, textvariable=self.tc_label, width=18)
         self.tc_label_entry.grid(row=1, column=1, sticky="ew", padx=(0, 6))
-        ttk.Label(samples, text="入力様式").grid(row=0, column=2, sticky="w")
-        self.tc_format_box = ttk.Combobox(
-            samples,
-            textvariable=self.tc_input_format,
-            values=("自動判定", "CPM様式", "RG様式"),
-            state="readonly",
-            width=12,
-        )
-        self.tc_format_box.grid(row=1, column=2, sticky="ew", padx=(0, 6))
-        ttk.Label(samples, text="検体レパトア").grid(row=0, column=3, columnspan=3, sticky="w")
+        ttk.Label(samples, text="検体レパトア").grid(row=0, column=2, columnspan=4, sticky="w")
         self.tc_sample_entry = ttk.Entry(samples, textvariable=self.tc_sample_path)
-        self.tc_sample_entry.grid(row=1, column=3, columnspan=3, sticky="ew")
+        self.tc_sample_entry.grid(row=1, column=2, columnspan=4, sticky="ew")
         self.tc_sample_button = ttk.Button(samples, text="参照…", command=self._browse_tc_sample)
         self.tc_sample_button.grid(row=1, column=6, padx=(6, 0))
+        ttk.Label(samples, text="入力様式").grid(row=2, column=0, sticky="w", pady=(6, 0))
+        self.tc_format_frame, self.tc_format_buttons = self._create_input_format_buttons(
+            samples,
+            self.tc_input_format,
+        )
+        self.tc_format_frame.grid(row=2, column=1, columnspan=6, sticky="w", pady=(6, 0))
 
         edit_buttons = ttk.Frame(samples)
-        edit_buttons.grid(row=2, column=0, columnspan=7, sticky="w", pady=(6, 5))
+        edit_buttons.grid(row=3, column=0, columnspan=7, sticky="w", pady=(6, 5))
         self.tc_add_button = ttk.Button(edit_buttons, text="時点を追加", command=self._add_tc_point)
         self.tc_add_button.pack(side="left")
         self.tc_update_button = ttk.Button(edit_buttons, text="選択行を更新", command=self._update_tc_point)
@@ -191,7 +202,7 @@ class QASASV2Application(SingleSampleApplication):
         for column, heading in tc_input_headings.items():
             self.tc_input_tree.heading(column, text=heading)
             self.tc_input_tree.column(column, width=tc_input_widths[column], anchor="w")
-        self.tc_input_tree.grid(row=3, column=0, columnspan=7, sticky="nsew")
+        self.tc_input_tree.grid(row=4, column=0, columnspan=7, sticky="nsew")
         self.tc_input_tree.bind("<<TreeviewSelect>>", self._load_selected_tc_point)
 
         action = ttk.Frame(outer)
@@ -359,7 +370,6 @@ class QASASV2Application(SingleSampleApplication):
             self.tc_mode_box,
             self.tc_day_entry,
             self.tc_label_entry,
-            self.tc_format_box,
             self.tc_sample_entry,
             self.tc_sample_button,
             self.tc_add_button,
@@ -396,6 +406,11 @@ class QASASV2Application(SingleSampleApplication):
         )
         if selected:
             self.tc_sample_path.set(selected)
+            try:
+                self._auto_select_input_format(Path(selected), self.tc_input_format, self.tc_status_text)
+            except ValueError as exc:
+                self.tc_input_format.set(AUTO_INPUT_FORMAT)
+                messagebox.showerror(APP_TITLE, f"入力形式を判定できませんでした。\n\n{exc}")
             if not self.tc_label.get().strip():
                 self.tc_label.set(Path(selected).stem)
 
@@ -409,6 +424,7 @@ class QASASV2Application(SingleSampleApplication):
         sample_path = Path(self.tc_sample_path.get().strip())
         if not sample_path.is_file():
             raise ValueError("検体レパトアファイルを選択してください。")
+        input_format = self._resolve_input_format(sample_path, self.tc_input_format)
         for index, existing in enumerate(self.tc_specs):
             if index != replacing_index and existing.day == day:
                 raise ValueError(
@@ -419,7 +435,7 @@ class QASASV2Application(SingleSampleApplication):
             day=day,
             label=self.tc_label.get().strip() or sample_path.stem,
             sample_path=sample_path,
-            input_format=self.tc_input_format.get(),
+            input_format=input_format,
         )
 
     def _add_tc_point(self) -> None:
@@ -434,6 +450,7 @@ class QASASV2Application(SingleSampleApplication):
         self.tc_day.set("")
         self.tc_label.set("")
         self.tc_sample_path.set("")
+        self.tc_input_format.set(AUTO_INPUT_FORMAT)
         self.tc_status_text.set(f"{len(self.tc_specs)}件の時点を登録しました。")
 
     def _selected_tc_index(self) -> int | None:
@@ -499,7 +516,7 @@ class QASASV2Application(SingleSampleApplication):
                     format_day(point.day),
                     point.label,
                     point.sample_path.name,
-                    point.input_format,
+                    input_format_label(point.input_format),
                     str(point.sample_path.parent),
                 ),
             )
@@ -510,6 +527,10 @@ class QASASV2Application(SingleSampleApplication):
                 widget.configure(state="disabled" if busy else "readonly")
             else:
                 widget.configure(state="disabled" if busy else "normal")
+        for button in self.tc_format_buttons:
+            button.configure(state="disabled" if busy else "normal")
+        for button in self.tc_database_format_buttons:
+            button.configure(state="disabled" if busy else "normal")
         if busy:
             self.tc_save_excel_button.configure(state="disabled")
             self.tc_save_figure_button.configure(state="disabled")
@@ -530,6 +551,11 @@ class QASASV2Application(SingleSampleApplication):
             return
         if self.tc_worker and self.tc_worker.is_alive():
             return
+        try:
+            database_format = resolve_database_format(self.tc_database_format.get())
+        except ValueError as exc:
+            messagebox.showerror(APP_TITLE, str(exc))
+            return
         self.tc_result = None
         self._clear_timecourse_results()
         self._set_timecourse_busy(True)
@@ -538,15 +564,17 @@ class QASASV2Application(SingleSampleApplication):
         self._append_tc_log(f"\n[{datetime.now():%Y-%m-%d %H:%M:%S}] 経時QASAS解析開始")
         self._append_tc_log(f"系列: {self.tc_series_name.get().strip() or 'QASAS time course'}")
         self._append_tc_log(f"DB  : {database}")
+        self._append_tc_log(f"DB形式: {database_format_label(database_format)}")
         mode = parse_matching_mode(self.tc_matching_mode.get())
         self._append_tc_log(f"方式: {mode_specification(mode).label} [{mode.value}]")
         for point in self.tc_specs:
             self._append_tc_log(
-                f"Day {format_day(point.day)} | {point.label} | {point.input_format} | {point.sample_path}"
+                f"Day {format_day(point.day)} | {point.label} | "
+                f"{input_format_label(point.input_format)} | {point.sample_path}"
             )
         self.tc_worker = threading.Thread(
             target=self._timecourse_worker,
-            args=(tuple(self.tc_specs), database, mode, self.tc_series_name.get()),
+            args=(tuple(self.tc_specs), database, database_format, mode, self.tc_series_name.get()),
             daemon=True,
             name="QASAS-timecourse-analysis",
         )
@@ -556,6 +584,7 @@ class QASASV2Application(SingleSampleApplication):
         self,
         specs: tuple[TimepointSpec, ...],
         database: Path,
+        database_format: str,
         mode: MatchingMode,
         series_name: str,
     ) -> None:
@@ -565,6 +594,7 @@ class QASASV2Application(SingleSampleApplication):
                 database,
                 matching_mode=mode,
                 series_name=series_name,
+                database_format=database_format,
                 status_callback=lambda text: self.tc_events.put(("status", text)),
                 progress_callback=lambda sample_no, sample_total, done, total: self.tc_events.put(
                     ("progress", (sample_no, sample_total, done, total))
@@ -623,7 +653,9 @@ class QASASV2Application(SingleSampleApplication):
             f"{result.series_name} | {len(result.timepoints)} time points | "
             f"Day {format_day(result.timepoints[0].spec.day)}〜{format_day(result.timepoints[-1].spec.day)}"
         )
+        database_format = result.database.metadata.get("Database input format", "未指定")
         self.tc_database_summary.set(
+            f"{database_format_label(database_format)} | "
             f"{len(result.database.entries):,} unique keys / {result.database.usable_rows:,} usable rows"
         )
         total_matched = sum(len(point.analysis.matches) for point in result.timepoints)

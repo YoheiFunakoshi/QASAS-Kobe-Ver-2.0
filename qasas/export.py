@@ -73,6 +73,7 @@ def export_result_xlsx(result: AnalysisResult, path: str | Path) -> Path:
         ("Input format", result.sample.input_format),
         ("Repertoire file", str(result.sample.source_path)),
         ("Repertoire SHA-256", sample_provenance.sha256),
+        ("Database input format", result.database.metadata.get("Database input format", "Unspecified")),
         ("Database file", str(result.database.source_path)),
         ("Database SHA-256", database_provenance.sha256),
         ("Sample unique clones", len(result.sample.clones)),
