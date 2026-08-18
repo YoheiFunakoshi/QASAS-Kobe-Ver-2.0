@@ -86,7 +86,7 @@ Frequency(≤k)    = sum Frequency(c) where d(c) ≤ k
 
 | シート | 内容 |
 |---|---|
-| `Time Course Summary` | Day順の横持ち集計、累積/個別3指標、Excel折れ線グラフ |
+| `Time Course Summary` | Day順の横持ち集計、累積/個別3指標、数値Day軸を用いた線・マーカー付きExcel散布図 |
 | `Long Summary` | 1行=1時点×1集計種別×1距離の縦持ち表 |
 | `Sample QC` | 時点ごとの入力様式、行数、クローン数、Read分母、メタデータ |
 | `Matched Clones` | Day・検体情報付き一致クローンとDB注釈 |
