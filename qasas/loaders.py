@@ -409,6 +409,7 @@ def load_database(
     path: str | Path,
     status_callback: StatusCallback = None,
     matching_mode: MatchingMode | str = MatchingMode.KOBE,
+    database_format: str | None = None,
 ) -> DatabaseData:
     source = Path(path)
     mode = parse_matching_mode(matching_mode)
@@ -548,6 +549,8 @@ def load_database(
             else f"Trim anchors={trim_database_anchors} ({anchored_count}/{len(nonempty_cdr3_values)} anchored nonempty rows)"
         ),
     }
+    if database_format:
+        metadata["Database input format"] = database_format
     if mode is MatchingMode.LEGACY:
         metadata.update(
             {

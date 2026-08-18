@@ -13,8 +13,20 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib import font_manager, rcParams
 
+from .database_formats import (
+    COV_ABDAB_DATABASE_FORMAT,
+    DATABASE_FORMAT_CHOICES,
+    database_format_label,
+    resolve_database_format,
+)
 from .engine import analyse
 from .export import export_result_xlsx
+from .input_formats import (
+    AUTO_INPUT_FORMAT,
+    INPUT_FORMAT_CHOICES,
+    input_format_label,
+    resolve_input_format,
+)
 from .loaders import load_database, load_sample
 from .models import AnalysisResult
 from .modes import GUI_MODE_LABELS, MatchingMode, mode_specification, parse_matching_mode
@@ -45,7 +57,8 @@ class QASASApplication:
 
         self.sample_path = tk.StringVar()
         self.database_path = tk.StringVar()
-        self.input_format = tk.StringVar(value="自動判定")
+        self.database_format = tk.StringVar(value=COV_ABDAB_DATABASE_FORMAT)
+        self.input_format = tk.StringVar(value=AUTO_INPUT_FORMAT)
         default_mode = mode_specification(MatchingMode.KOBE)
         self.matching_mode = tk.StringVar(value=default_mode.label)
         self.mode_description = tk.StringVar(value=default_mode.description)
@@ -71,6 +84,74 @@ class QASASApplication:
         style.configure("Treeview", rowheight=26, font=("Yu Gothic UI", 9))
         style.configure("Treeview.Heading", font=("Yu Gothic UI", 9, "bold"))
 
+    def _create_input_format_buttons(
+        self,
+        parent: tk.Misc,
+        variable: tk.StringVar,
+    ) -> tuple[ttk.Frame, tuple[ttk.Radiobutton, ...]]:
+        frame = ttk.Frame(parent)
+        enabled_buttons: list[ttk.Radiobutton] = []
+        for column, choice in enumerate(INPUT_FORMAT_CHOICES):
+            button = ttk.Radiobutton(
+                frame,
+                text=choice.label,
+                variable=variable,
+                value=choice.value,
+            )
+            button.grid(row=0, column=column, sticky="w", padx=(0, 12))
+            if choice.enabled:
+                enabled_buttons.append(button)
+            else:
+                button.state(["disabled"])
+        ttk.Label(
+            frame,
+            text="※ 参照したファイルからRG/CPMを自動選択します。",
+            style="Subtitle.TLabel",
+        ).grid(
+            row=1,
+            column=0,
+            columnspan=len(INPUT_FORMAT_CHOICES),
+            sticky="w",
+            pady=(2, 0),
+        )
+        return frame, tuple(enabled_buttons)
+
+    def _resolve_input_format(self, path: Path, variable: tk.StringVar) -> str:
+        resolved = resolve_input_format(variable.get(), path)
+        variable.set(resolved)
+        return resolved
+
+    def _auto_select_input_format(self, path: Path, variable: tk.StringVar, status: tk.StringVar) -> None:
+        resolved = resolve_input_format(AUTO_INPUT_FORMAT, path)
+        variable.set(resolved)
+        status.set(f"入力形式を自動判定しました: {input_format_label(resolved)}")
+
+    def _create_database_format_buttons(
+        self,
+        parent: tk.Misc,
+        variable: tk.StringVar,
+    ) -> tuple[ttk.Frame, tuple[ttk.Radiobutton, ...]]:
+        frame = ttk.Frame(parent)
+        enabled_buttons: list[ttk.Radiobutton] = []
+        for column, choice in enumerate(DATABASE_FORMAT_CHOICES):
+            button = ttk.Radiobutton(
+                frame,
+                text=choice.label,
+                variable=variable,
+                value=choice.value,
+            )
+            button.grid(row=0, column=column, sticky="w", padx=(0, 12))
+            if choice.enabled:
+                enabled_buttons.append(button)
+            else:
+                button.state(["disabled"])
+        ttk.Label(
+            frame,
+            text="※ 現在はCoV-AbDabのみ対応しています。",
+            style="Subtitle.TLabel",
+        ).grid(row=1, column=0, columnspan=len(DATABASE_FORMAT_CHOICES), sticky="w", pady=(2, 0))
+        return frame, tuple(enabled_buttons)
+
     def _build_ui(self) -> None:
         outer = ttk.Frame(self.root, padding=14)
         outer.pack(fill="both", expand=True)
@@ -95,14 +176,11 @@ class QASASApplication:
         self.sample_button.grid(row=0, column=2, padx=(8, 0), pady=4)
 
         ttk.Label(input_frame, text="入力様式").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
-        self.format_box = ttk.Combobox(
+        self.format_frame, self.format_buttons = self._create_input_format_buttons(
             input_frame,
-            textvariable=self.input_format,
-            values=("自動判定", "CPM様式", "RG様式"),
-            state="readonly",
-            width=15,
+            self.input_format,
         )
-        self.format_box.grid(row=1, column=1, sticky="w", pady=4)
+        self.format_frame.grid(row=1, column=1, columnspan=2, sticky="w", pady=4)
 
         ttk.Label(input_frame, text="照合方式").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=4)
         mode_frame = ttk.Frame(input_frame)
@@ -123,11 +201,18 @@ class QASASApplication:
             wraplength=620,
         ).pack(side="left", padx=(10, 0))
 
-        ttk.Label(input_frame, text="抗体DB (CSV)").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(input_frame, text="DB形式").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        self.database_format_frame, self.database_format_buttons = self._create_database_format_buttons(
+            input_frame,
+            self.database_format,
+        )
+        self.database_format_frame.grid(row=3, column=1, columnspan=2, sticky="w", pady=4)
+
+        ttk.Label(input_frame, text="抗体DBファイル").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=4)
         self.database_entry = ttk.Entry(input_frame, textvariable=self.database_path)
-        self.database_entry.grid(row=3, column=1, sticky="ew", pady=4)
+        self.database_entry.grid(row=4, column=1, sticky="ew", pady=4)
         self.database_button = ttk.Button(input_frame, text="参照…", command=self._browse_database)
-        self.database_button.grid(row=3, column=2, padx=(8, 0), pady=4)
+        self.database_button.grid(row=4, column=2, padx=(8, 0), pady=4)
 
         action_frame = ttk.Frame(outer)
         action_frame.pack(fill="x", pady=10)
@@ -249,6 +334,7 @@ class QASASApplication:
             )
             if candidates:
                 self.sample_path.set(str(candidates[0]))
+                self._auto_select_input_format(candidates[0], self.input_format, self.status_text)
         if database_dir.is_dir():
             candidates = sorted(database_dir.glob("*.csv"), key=lambda path: path.name.lower())
             if candidates:
@@ -268,6 +354,11 @@ class QASASApplication:
         )
         if selected:
             self.sample_path.set(selected)
+            try:
+                self._auto_select_input_format(Path(selected), self.input_format, self.status_text)
+            except ValueError as exc:
+                self.input_format.set(AUTO_INPUT_FORMAT)
+                messagebox.showerror(APP_TITLE, f"入力形式を判定できませんでした。\n\n{exc}")
 
     def _browse_database(self) -> None:
         initial = Path(self.database_path.get()).parent if self.database_path.get() else self.app_dir
@@ -288,7 +379,10 @@ class QASASApplication:
         state = "disabled" if busy else "normal"
         for widget in (self.run_button, self.sample_button, self.database_button, self.sample_entry, self.database_entry):
             widget.configure(state=state)
-        self.format_box.configure(state="disabled" if busy else "readonly")
+        for button in self.format_buttons:
+            button.configure(state=state)
+        for button in self.database_format_buttons:
+            button.configure(state=state)
         self.mode_box.configure(state="disabled" if busy else "readonly")
         if busy:
             self.save_button.configure(state="disabled")
@@ -310,6 +404,12 @@ class QASASApplication:
             return
         if self.worker and self.worker.is_alive():
             return
+        try:
+            input_format = self._resolve_input_format(sample, self.input_format)
+            database_format = resolve_database_format(self.database_format.get())
+        except ValueError as exc:
+            messagebox.showerror(APP_TITLE, str(exc))
+            return
         self.result = None
         self._clear_results()
         self._set_busy(True)
@@ -317,12 +417,13 @@ class QASASApplication:
         self._append_log(f"\n[{datetime.now():%Y-%m-%d %H:%M:%S}] QASAS解析開始")
         self._append_log(f"検体: {sample}")
         self._append_log(f"DB  : {database}")
-        input_format = self.input_format.get()
+        self._append_log(f"入力形式: {input_format_label(input_format)}")
+        self._append_log(f"DB形式: {database_format_label(database_format)}")
         matching_mode = parse_matching_mode(self.matching_mode.get())
         self._append_log(f"方式: {mode_specification(matching_mode).label} [{matching_mode.value}]")
         self.worker = threading.Thread(
             target=self._analysis_worker,
-            args=(sample, database, input_format, matching_mode),
+            args=(sample, database, input_format, database_format, matching_mode),
             daemon=True,
             name="QASAS-analysis",
         )
@@ -333,6 +434,7 @@ class QASASApplication:
         sample_path: Path,
         database_path: Path,
         input_format: str,
+        database_format: str,
         matching_mode: MatchingMode,
     ) -> None:
         try:
@@ -343,7 +445,12 @@ class QASASApplication:
                 status,
                 matching_mode=matching_mode,
             )
-            database = load_database(database_path, status, matching_mode=matching_mode)
+            database = load_database(
+                database_path,
+                status,
+                matching_mode=matching_mode,
+                database_format=database_format,
+            )
             self.events.put(
                 ("status", f"{mode_specification(matching_mode).short_label}方式でCDR3距離を照合しています…")
             )
@@ -404,7 +511,9 @@ class QASASApplication:
                 f"{result.sample.total_reads:,} denominator"
             )
         self.sample_summary.set(f"{result.sample.sample_id} | {len(result.sample.clones):,} clones / {read_text}")
+        database_format = result.database.metadata.get("Database input format", "未指定")
         self.database_summary.set(
+            f"{database_format_label(database_format)} | "
             f"{len(result.database.entries):,} unique keys / {result.database.usable_rows:,} usable rows"
         )
         self.match_summary.set(

@@ -103,6 +103,7 @@ def analyse_timecourse(
     matching_mode: MatchingMode | str = MatchingMode.KOBE,
     *,
     series_name: str = "",
+    database_format: str | None = None,
     status_callback: StatusCallback = None,
     progress_callback: TimeCourseProgressCallback = None,
 ) -> TimeCourseResult:
@@ -115,7 +116,12 @@ def analyse_timecourse(
         raise ValueError(f"抗原結合性データベースが見つかりません: {database_source}")
     if status_callback:
         status_callback("共通の抗原結合性データベースを読み込んでいます…")
-    database = load_database(database_source, status_callback, matching_mode=mode)
+    database = load_database(
+        database_source,
+        status_callback,
+        matching_mode=mode,
+        database_format=database_format,
+    )
 
     timepoints: list[TimepointResult] = []
     total_timepoints = len(ordered_specs)
